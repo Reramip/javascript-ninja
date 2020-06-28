@@ -122,7 +122,7 @@ arguments[0]: miku
 
 ### this简介
 
-调用函数时，另一个隐式的参数this用以指代函数的上下文（context），代表函数调用相关联的对象。
+调用函数时，另一个隐式的参数this用以指代函数的上下文（context），代表函数调用相关联的**对象**。
 
 函数的调用主要有四种：
 
@@ -153,7 +153,7 @@ function Cat(){
 meow.call(cat);
 ```
 
-控制台输入结果如下：
+控制台输出结果如下：
 
 ```javascript
 Window about:home // 直接调用 严格模式下为undefined
@@ -182,7 +182,7 @@ console.log(body.meow()); // <body class=....>
 console.log(cat.meow());  // Object { meow: meow() }
 ```
 
-body的meow方法并没有指向cat的函数上下文，而是指向了body的上下文，这正是因为在函数真正执行之前，它的上下文并未绑定到实体。meow方法仅仅是在cat对象上声明了，它在body的上下文中执行，那么this要指向body的函数上下文。
+body的meow方法并没有指向cat的函数上下文，而是指向了body的上下文，因为在函数真正执行之前，它的上下文并未绑定到实体。meow方法仅仅是在cat对象上声明了，它在body的上下文中执行，那么this要指向body的函数上下文。
 
 使用箭头函数（ES6）或bind方法（ES5）
 
@@ -217,14 +217,25 @@ const body=document.getElementsByTagName("body")[0];
 body.meow=cat.meow;
 console.log(body.meow()); // Object { meow: meow() }
 console.log(cat.meow());  // Object { meow: meow() }
-``` 
+```
+
+简单的forEach迭代方法实现
+
+```javascript
+function forEach(list, callback){
+  for(let i=0;i<list.length;++i){
+    callback.call(list[i], i);
+  }
+}
+// usage: forEach(arr, function(index){})
+```
 
 要注意的是，bind与apply/call不同
 
 - apply/call将函数**临时地**与传递的上下文绑定，并执行函数，在执行过程中使用传递的对象的上下文作为上下文，最终返回函数执行的返回值
 - bind创建一个**永久地**与传递的上下文相绑定的**新函数**，不执行，返回这个新函数。
 
-#### 构造函数的执行过程
+### 构造函数的执行过程
 
 1. 创建一个新的空对象
 2. 将这个新的对象作为this参数传递给构造函数，成为构造函数的函数上下文
@@ -232,3 +243,148 @@ console.log(cat.meow());  // Object { meow: meow() }
 
 特殊的是，构造函数有返回值时，若返回值是对象，`new`运算符将返回这个对象，否则返回新构造的对象。 
 
+### 执行上下文
+
+上下文（函数上下文、全局上下文）代表的是与函数调用相关联的**对象**，不能与执行上下文混同。
+
+执行上下文类似操作系统中的进程上下文。进程上下文保存了中断恢复所需的全部数据，是运行时的现场。对于单线程模型的Javascript而言，JS引擎利用执行上下文跟踪函数的执行。发生函数调用时，当前的执行上下文停止执行。要为新调用的函数创建一个新的执行上下文，并让它入调用栈，而调用栈的栈顶表示当前运行的函数的执行上下文或全局执行上下文。
+
+### 词法环境/作用域
+
+在作用域范围内，每次执行代码时，代码段都会获取与之相关的词法环境。词法环境是在函数**创建**的时候确定的。
+
+词法环境有层次关系。如果内部的词法环境中找不到某个变量，就会查找外部环境直至全局环境。
+
+```javascript
+function foo(){
+  var fooFoo="foofoofoo";
+  function bar(){
+    var barBar="barbarbar";
+    console.log(fooFoo+barBar);
+  }
+  bar();
+}
+foo();
+```
+
+bar中可以访问到上级环境的元素fooFoo，输出
+
+```javascript
+foofoofoobarbarbar
+```
+
+在调用函数时，会创建一个新的执行上下文进入调用栈，还会为其创建一个相关联的词法环境。调用这个函数时的环境的引用储存在不可直接访问的内部属性`[[Environment]]`上，每个函数的`[[Environment]]`中都有指向创建这个函数的环境的引用。foo的`[[Environment]]`指向全局环境，而bar的`[[Environment]]`指向foo环境。一个函数在调用栈越靠顶，它自身的环境就越处于内部。全局环境在环境最外部，全局执行上下文也在调用栈的最底部。
+
+### var, let, const
+
+使用var声明（定义）一个变量，它将属于和它**距离最近的函数**或全局词法环境。
+
+使用ES6的let/const声明（定义）变量，它属于和它距离最近的词法环境，这在var之上还包含了块作用域、循环
+
+### 变量提升
+
+JS中可以先访问函数，后声明函数，引擎会自动地将函数声明提前。变量类似。这被称作变量提升。
+
+事实上，Javascript代码分两阶段执行：
+
+1. 预解析阶段：访问并注册当前词法环境下声明的所有变量、函数
+   - 当前词法环境是函数环境时，创建函数参数默认值
+   - 当前词法环境是函数环境或全局环境时，扫描当前代码段，找到所有的**函数声明**（**忽略函数表达式和箭头函数**）。为每一个找到的函数声明创建函数，并绑定到当前环境下的同名标识符上。若标识符存在，则用新创建的函数**覆盖**之。
+   - 查找所有var, let, const变量声明。若标识符不存在，注册标识符并初始化为undefined；若标识符存在，不进行覆盖，**保留原值**。
+2. 执行阶段：运行代码
+
+也就是说，在一个词法环境下，函数声明总是最优先的，然后是变量声明，声明完了才真正执行代码。所以它们会被“提升”。
+
+```javascript
+console.log(typeof declaredFunction);
+console.log(typeof functionExpression);
+console.log(typeof lambda);
+
+function declaredFunction(){}
+var functionExpression=function(){};
+var lambda=()=>{};
+```
+
+运行结果如下：
+
+```text
+function
+undefined
+undefined
+```
+
+上例展示了预解析阶段仅对函数声明进行标识符注册，表达式和箭头函数被视作变量声明，初始化为undefined。
+
+如果一个函数声明和变量声明重名会发生什么？
+
+```javascript
+console.log(typeof f);
+var f="fff";
+console.log(typeof f);
+function f(){}
+console.log(typeof f);
+```
+
+运行结果：
+
+```text
+function
+string
+string
+```
+
+究其原因，在同属于全局执行上下文和全局词法环境的这一代码段真正执行之前的预解析阶段，Javascript引擎先找到了函数声明`function f()`，将其绑定到标识符`f`上。而后来引擎为尝试为变量声明`f`注册标识符时，由于标识符`f`已经存在，将它忽略掉。然后进入执行阶段，第一行输出类型为function。为f赋值`"fff"`，标识符原来指向函数的引用被指向字符串的引用覆盖掉了，所以后面输出string。程序的执行过程中跳过了函数声明。
+
+### 闭包
+
+接下来用书中的例子解释闭包
+
+```javascript
+function Ninja(){
+  var feints=0;
+  this.getFeints=function(){
+    return feints;
+  }
+  this.feint=function(){
+    feints++;
+  }
+}
+
+var ninja1=new Ninja();
+console.log(ninja1.feints);
+ninja1.feint();
+console.log(ninja1.getFeints());
+
+var ninja2=new Ninja();
+console.log(ninja2.getFeints());
+```
+
+运行结果：
+
+```javascript
+undefined
+1
+0
+```
+
+在代码执行过程中，
+
+1. 使用new关键字调用构造函数`Ninja`，创建新的函数执行上下文入调用栈；
+2. 为函数创建词法环境。Ninja环境保存了对变量feints的引用，`[[Environment]]`指向全局环境；
+3. 执行构造函数。为创建的两个表达式函数创建词法环境，这两个函数是在Ninja环境下创建的，它们的`[[Environment]]`都指向上一级词法环境Ninja环境；
+4. 构造函数生成的新对象作为返回值赋给ninja1，调用栈顶退出，返回全局执行上下文；
+5. 在全局词法环境下查找ninja1.feints，由于feints并不是ninja1的属性，找不到，且没有上级词法环境，返回undefined；
+6. 调用ninja1.feint方法，创建新的函数执行上下文入栈；
+7. ninja1.feint环境下没有feints，但它的`[[Environment]]`指向Ninja环境，其中有feints的引用，可以进行操作。执行操作后，栈顶退出，返回全局执行上下文；
+8. 调用ninja1.getFeints方法，同理；
+9. new调用Ninja构造函数赋给ninja2，略。要注意ninja1与ninja2分别有两个独立的Ninja环境，互不干涉。
+
+```javascript
+var imposter={};
+imposter.getFeints=ninja1.getFeints;
+console.log(imposter.getFeints()) // 1
+```
+
+结果是1，这验证了闭包并不是真正的`private`。这也说明了词法环境是在函数创建时就确定的。词法环境不像`this`上下文那样在运行时才确定，不绑定的话每次运行都可能不同。
+
+只要存在能够通过闭包访问到“private”变量的引用，词法环境就会一直保留，不被回收。
