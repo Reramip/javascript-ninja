@@ -388,3 +388,107 @@ console.log(imposter.getFeints()) // 1
 结果是1，这验证了闭包并不是真正的`private`。这也说明了词法环境是在函数创建时就确定的。词法环境不像`this`上下文那样在运行时才确定，不绑定的话每次运行都可能不同。
 
 只要存在能够通过闭包访问到“private”变量的引用，词法环境就会一直保留，不被回收。
+
+### 生成器
+
+可以**非阻塞挂起**，执行上下文类似闭包**不被回收**的特殊函数。它**基于每次请求**生成值。
+
+以书中的作业题为例：
+
+```javascript
+function* Gen(val) {
+  val = yield val*2;
+  yield val;
+}
+
+let generator = Gen(2);
+let a1 = generator.next(3).value; // a1 = 4
+let a2 = generator.next(5).value; // a2 = 5
+
+generator.next() // Object { value: undefined, done: true }
+```
+
+调用生成器函数Gen()将返回一个用来控制生成器执行的迭代器，赋给generator。
+
+显然，generator迭代器要控制生成器的执行，它必须要获取Gen生成器函数的函数执行上下文才行。如若不然，Gen的上下文在离开调用栈顶时就消失了，生成器内部的数据没了，还怎么从之前的返回值里生成新值？
+
+generator作为Gen生成器的迭代器，拥有指向Gen执行上下文的引用。这就和闭包一样，因为存在能从外界访问到它的引用，它就不会被javascript引擎回收，生成器的执行上下文就保留了下来。每次使用迭代器暴露的接口`next()`请求生成器生成新值时，都会直接把已保存下来的Gen函数执行上下文推入调用栈。挂起时再把它的执行上下文搁置到一边，而不销毁。
+
+#### 为什么运行后的结果是a1=4，a2=5
+
+上例的执行过程：
+
+1. 传参数2进Gen，创建了生成器的执行上下文和词法环境，但是并不执行生成器内部的代码，而是返回一个迭代器；
+2. 第一次调用迭代器的`next()`方法，传入实参3。此时生成器的状态称为“**挂起开始**”，其内部的代码还没有执行。**由于生成器并没有在`yield`字段挂起，这个传入的3会被忽略**，按val=2执行生成器代码。计算`val*2`，返回**含有中间结果4的新对象**给a1，然后在yield表达式`(yield val*2)`处挂起，称为“**挂起让渡**”；
+3. 第二次调用迭代器的`next()`方法，传入实参5。此时生成器正**在yield表达式`(yield val*2)`处挂起**，**把5赋给这一整个yield表达式**，即是使`(yield val*2)`为`5`，执行赋值语句`val=5`。执行到下一行，返回含有中间结果5的新对象给a2，然后再在`(yield val)`处挂起；
+4. 再调用迭代器的`next()`方法，可以看到返回对象的value未定义，而done属性为true表明这个生成器已用这个迭代器迭代完成，没有新值可以生成了。
+
+生成器可以一定程度上让代码更优雅。以书上的深度优先的递归DOM树遍历为例(有改动)：
+
+```javascript
+function traverseDOM(element, callback){
+  callback(element);
+  element=element.firstElementChild;
+  while(element){
+    traverseDOM(element, callback);
+    element=element.nextElementSibling;
+  }
+}
+const tree=document.getElementById("tree");
+traverseDOM(element, element=>{
+  if(element) console.log(element.nodeName);
+});
+```
+
+也可以用一个全局的数组用来保存每次遍历到的节点，再map。但这样的函数操作了外部的变量，不“纯正”。
+
+使用生成器可以让函数更纯粹，只做一件事：
+
+```javascript
+function* traverseDOMGenerator(element){
+  yield element;
+  element=element.firstElementChild;
+  while(element){
+    yield* traverseDOMGenerator(element); // 转移到另一个traverseDOMGenerator实例上
+    element=element.nextElementSibling;
+  }
+}
+const tree=document.getElementById("tree");
+for(let element of traverseDOMGenerator()){ // 遍历取值的let-of语法糖
+  if(element) console.log(element.nodeName);
+}
+```
+
+### Promise
+
+promise（音标[ˈprɒmɪs]，重音在o不在i）对象是**异步**任务结果的占位符，是对未来结果的期望、保证。一个promise对象从等待（pending）状态开始，进入完成态（fulfilled/resolved）或拒绝态（rejected）。一旦promise对象进入完成态或拒绝态，它的状态就不可变了。
+
+promise对象接受两个回调函数参数作为完成/拒绝时方法。
+
+书中的promise案例：
+
+```javascript
+funtion getJSON(url){
+  return new Promise((resolve, reject)=>{
+    const request = new XMLHttpRequest();
+    request.open("GET", url);
+    request.onload = function(){
+      try{
+        if(this.status === 200){
+          resolve(JSON.parse(this.response));
+        }else{
+          reject(`${this.status} ${this.statusText}`);
+        }
+      }catch(err){
+        reject(err.message);
+      }
+    };
+    request.onerror = function(){
+      reject(`${this.status} ${this.statusText}`);
+    };
+    request.send();
+  });
+}
+```
+
+## 对象
