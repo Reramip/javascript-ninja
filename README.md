@@ -583,7 +583,7 @@ Warrior.duel = function(warrior1, warrior2){
 // 计时使能
 function makeTimed(target){
   return new Proxy(target,{
-    apply(target, thisArg, args){
+    apply:(target, thisArg, args)=>{
       console.time(target.name+" timer");
       const result = target.apply(thisArg, args);
       console.timeEnd(target.name+" timer");
