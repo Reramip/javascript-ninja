@@ -241,7 +241,7 @@ function forEach(list, callback){
 2. 将这个新的对象作为this参数传递给构造函数，成为构造函数的函数上下文
 3. 新构造的对象将作为new运算符的返回值
 
-特殊的是，构造函数有返回值时，若返回值是对象，`new`运算符将返回这个对象，否则返回新构造的对象。 
+特殊的是，构造函数有返回值时，若返回值是对象，`new`运算符将返回这个对象，否则返回新构造的对象。
 
 ### 执行上下文
 
@@ -492,3 +492,87 @@ funtion getJSON(url){
 ```
 
 ## 对象
+
+### 原型
+
+- 每个函数都有一个原型对象
+- 这个原型对象含有constructor属性，指向创建对象的函数本身
+- 将函数作为构造函数调用时（new），新创建的对象的原型为构造函数的原型
+
+```javascript
+function Ninja(){}
+Ninja.prototype.swingSword = function(){
+  return true;
+}
+const ninja = new Ninja();
+```
+
+- Ninja拥有原型对象Ninja.prototype
+- Ninja.prototype.constructor === Ninja
+- ninja的内部属性[[prototype]]指向Ninja.prototype
+
+对象与原型的引用关系是在对象**创建**时确定的，如果改变Ninja的原型，已创建的ninja仍然会保持原来的原型不变。但是再调用Ninja构造函数得到的新对象将会以新的原型为原型。
+
+通过原型可以实现继承关系：
+
+```javascript
+function Animal(){} // Animal函数拥有原型对象属性Animal.prototype
+Animal.prototype.eat = function(){  // Animal.prototype.constructor === Animal
+  return "eating";
+}
+
+function Cat(){}
+// Cat.prototype = Animal.prototype 不建议使用，因为Cat的原型并不是Animal的原型。在之后如果还要对Cat.prototype进行修改，会全部应用到Animal.prototype上
+Cat.prototype = new Animal(); // 让Cat.prototype指向一个新的Animal对象。新对象的内部[[prototype]]指向Animal.prototype
+Object.defineProperty(Cat.prototype, "constructor", {
+  enumerable: false,
+  writable: true,
+  value: Cat
+}); // 或直接 Cat.prototype.constructor = Cat;
+
+```
+
+书上也是这样new了一个新的父类实例作为Ninja（这里是Cat）原型。这很奇怪，这样做是否表示每一个Cat都来自同一个特定的Animal？而且，如果Animal父类有自己的属性，也会被子类继承下去
+
+为避免这样的问题，使用Object.create方法(ES5)从原型创建对象。
+
+```javascript
+Cat.prototype = Object.create(Animal.prototype);// 创建一个以Animal.prototype为[[prototype]]的新对象，赋值给Cat.prototype
+Cat.prototype.constructor = Cat;
+```
+
+instanceof运算符表示右边的函数原型是否位于左边的对象的原型链上。
+
+### class
+
+以下两种代码等价：
+
+```javascript
+// ES6
+class Warrior{
+  constructor(weapon){
+    this.weapon = weapon;
+  }
+
+  wield(){
+    return "Wielding"+this.weapon;
+  }
+
+  static duel(warrior1, warrior2){
+    return warrior1.wield()+' '+warrior2.wield();
+  }
+}
+
+// Before ES6
+function Warrior(weapon){
+  this.weapon = weapon;
+}
+Warrior.prototype.wield = function(){
+  return "Wielding"+this.weapon;
+}
+Warrior.duel = function(warrior1, warrior2){
+  return warrior1.wield()+' '+warrior2.wield();
+}
+```
+
+
