@@ -575,4 +575,43 @@ Warrior.duel = function(warrior1, warrior2){
 }
 ```
 
+### Proxy
 
+通过代理可以控制对象的交互行为，将目标对象包装成代理对象，通过代理对象执行要对目标对象执行的操作。是更一般化的get与set。
+
+```javascript
+// 计时使能
+function makeTimed(target){
+  return new Proxy(target,{
+    apply(target, thisArg, args){
+      console.time(target.name+" timer");
+      const result = target.apply(thisArg, args);
+      console.timeEnd(target.name+" timer");
+      return result;
+    }
+  })
+}
+```
+
+```javascript
+// 数组负索引使能
+function makeArrayNegativeIndexable(targetArray){
+  if(!Array.isArray(targetArray)){
+    throw new TypeError("not an array");
+  }
+  return new Proxy(targetArray, {
+    get:(target, index)=>{
+      index=+index;
+      return target[index<0? target.length+index: index];
+    },
+    set:(target, index, value)=>{
+      index=+index;
+      target[index<0? target.length+index: index] = value;
+    }
+  })
+}
+```
+
+但是，显然给对象加一层包装需要消耗性能。应该慎用代理。
+
+## 模块
